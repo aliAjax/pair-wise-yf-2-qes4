@@ -4,6 +4,8 @@ export type ShadeLevelType = 'none' | 'partial' | 'full';
 export type NoiseLevelType = 'quiet' | 'moderate' | 'noisy';
 export type StayDurationType = 'short' | 'medium' | 'long' | 'verylong';
 export type TimePeriodType = 'morning' | 'noon' | 'afternoon' | 'evening' | 'night';
+export type SeasonType = 'spring' | 'summer' | 'autumn' | 'winter';
+export type PhenologyStageType = 'budding' | 'blooming' | 'leaf-fall';
 
 export interface BenchExperience {
   id: string;
@@ -11,6 +13,16 @@ export interface BenchExperience {
   timePeriod: TimePeriodType;
   notes: string;
   rating: number;
+}
+
+export interface PhenologyRecord {
+  id: string;
+  benchId: string;
+  season: SeasonType;
+  plantName: string;
+  stage: PhenologyStageType;
+  observedAt: string;
+  createdAt: string;
 }
 
 export interface Bench {
@@ -28,6 +40,7 @@ export interface Bench {
   rating: number;
   review: string;
   experiences: BenchExperience[];
+  phenology: PhenologyRecord[];
   createdAt: string;
   updatedAt: string;
 }
@@ -84,4 +97,19 @@ export const TIME_PERIOD_ICONS: Record<TimePeriodType, string> = {
   afternoon: 'cloud-sun',
   evening: 'sunset',
   night: 'moon',
+};
+
+export const SEASON_LABELS: Record<SeasonType, string> = {
+  spring: '春',
+  summer: '夏',
+  autumn: '秋',
+  winter: '冬',
+};
+
+export const SEASON_ORDER: SeasonType[] = ['spring', 'summer', 'autumn', 'winter'];
+
+export const PHENOLOGY_STAGE_LABELS: Record<PhenologyStageType, string> = {
+  budding: '萌芽',
+  blooming: '盛花',
+  'leaf-fall': '落叶',
 };

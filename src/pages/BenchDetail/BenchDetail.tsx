@@ -14,6 +14,8 @@ import {
   Sunset,
   Moon,
   CloudSun,
+  Leaf,
+  Plus,
 } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
 import {
@@ -23,16 +25,45 @@ import {
   NOISE_LABELS,
   STAY_DURATION_LABELS,
   TIME_PERIOD_LABELS,
+  SEASON_LABELS,
+  SEASON_ORDER,
+  PHENOLOGY_STAGE_LABELS,
 } from '@/types';
-import type { TimePeriodType } from '@/types';
+import type { TimePeriodType, SeasonType, PhenologyStageType } from '@/types';
 import Rating from '@/components/Rating/Rating';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
+import {
+  getCurrentSeason,
+  SEASON_ICONS,
+  PHENOLOGY_STAGE_ICONS,
+  PHENOLOGY_STAGE_COLORS,
+  PHENOLOGY_STAGE_BG,
+} from '@/utils/phenology';
 
 export default function BenchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBenchById, deleteBench, initialize, initialized } = useBenchStore();
+  const {
+    getBenchById,
+    deleteBench,
+    initialize,
+    initialized,
+    addPhenologyRecord,
+    deletePhenologyRecord,
+  } = useBenchStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [phenoForm, setPhenoForm] = useState<{
+    season: SeasonType;
+    plantName: string;
+    stage: PhenologyStageType;
+    observedAt: string;
+  }>({
+    season: getCurrentSeason(),
+    plantName: '',
+    stage: 'budding',
+    observedAt: new Date().toISOString().slice(0, 10),
+  });
+  const [phenoMessage, setPhenoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!initialized) {
@@ -75,10 +106,39 @@ export default function BenchDetail() {
     return order.indexOf(a.timePeriod) - order.indexOf(b.timePeriod);
   });
 
+  const sortedPhenology = [...(bench.phenology ?? [])].sort(
+    (a, b) => SEASON_ORDER.indexOf(a.season) - SEASON_ORDER.indexOf(b.season)
+  );
+
   const handleDelete = () => {
     if (id) {
       deleteBench(id);
       navigate('/');
+    }
+  };
+
+  const handleAddPhenology = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+
+    if (!phenoForm.plantName.trim()) {
+      setPhenoMessage({ type: 'error', text: '请填写植物名称' });
+      return;
+    }
+    if (!phenoForm.observedAt) {
+      setPhenoMessage({ type: 'error', text: '请选择观察日期' });
+      return;
+    }
+
+    const result = addPhenologyRecord(id, {
+      season: phenoForm.season,
+      plantName: phenoForm.plantName.trim(),
+      stage: phenoForm.stage,
+      observedAt: phenoForm.observedAt,
+    });
+    setPhenoMessage({ type: result.success ? 'success' : 'error', text: result.message });
+    if (result.success) {
+      setPhenoForm((prev) => ({ ...prev, plantName: '' }));
     }
   };
 
@@ -211,10 +271,136 @@ export default function BenchDetail() {
               </div>
             </div>
           </div>
+
+          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
+            <h2 className="font-serif text-lg font-semibold text-deep-brown mb-1">
+              物候记录
+            </h2>
+            <p className="text-xs text-ink-light mb-4">
+              记录长椅周边植物的萌芽、盛花与落叶，同一季节只保留最新一次观察
+            </p>
+
+            <form onSubmit={handleAddPhenology} className="mb-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">季节</label>
+                  <select
+                    value={phenoForm.season}
+                    onChange={(e) => setPhenoForm((prev) => ({ ...prev, season: e.target.value as SeasonType }))}
+                    className="w-full px-2.5 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white cursor-pointer"
+                  >
+                    {SEASON_ORDER.map((season) => (
+                      <option key={season} value={season}>{SEASON_LABELS[season]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">植物名称</label>
+                  <input
+                    type="text"
+                    placeholder="如：梧桐"
+                    value={phenoForm.plantName}
+                    onChange={(e) => setPhenoForm((prev) => ({ ...prev, plantName: e.target.value }))}
+                    className="w-full px-2.5 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown placeholder:text-ink-light/50 focus:bg-white transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">物候状态</label>
+                  <select
+                    value={phenoForm.stage}
+                    onChange={(e) => setPhenoForm((prev) => ({ ...prev, stage: e.target.value as PhenologyStageType }))}
+                    className="w-full px-2.5 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white cursor-pointer"
+                  >
+                    {Object.entries(PHENOLOGY_STAGE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">观察日期</label>
+                  <input
+                    type="date"
+                    value={phenoForm.observedAt}
+                    onChange={(e) => setPhenoForm((prev) => ({ ...prev, observedAt: e.target.value }))}
+                    className="w-full px-2.5 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white cursor-pointer"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-moss-green hover:bg-moss-light rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  补录物候
+                </button>
+                {phenoMessage && (
+                  <span className={`text-xs ${phenoMessage.type === 'success' ? 'text-moss-green' : 'text-red-500'}`}>
+                    {phenoMessage.text}
+                  </span>
+                )}
+              </div>
+            </form>
+
+            {sortedPhenology.length > 0 ? (
+              <div className="space-y-3">
+                {sortedPhenology.map((record) => {
+                  const SeasonIcon = SEASON_ICONS[record.season];
+                  const StageIcon = PHENOLOGY_STAGE_ICONS[record.stage];
+                  return (
+                    <div
+                      key={record.id}
+                      className="flex items-center gap-3 p-3 bg-warm-cream/50 rounded-lg hover:bg-warm-cream transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 px-2 py-1 bg-white/70 rounded-md flex-shrink-0">
+                        <SeasonIcon className="w-3.5 h-3.5 text-ochre" />
+                        <span className="text-xs font-medium text-deep-brown">
+                          {SEASON_LABELS[record.season]}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-deep-brown">
+                            {record.plantName}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${PHENOLOGY_STAGE_BG[record.stage]} ${PHENOLOGY_STAGE_COLORS[record.stage]}`}>
+                            <StageIcon className="w-3 h-3" />
+                            {PHENOLOGY_STAGE_LABELS[record.stage]}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink-light mt-0.5">
+                          观察于 {record.observedAt}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deletePhenologyRecord(bench.id, record.id)}
+                        className="p-1.5 text-ink-light/60 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                        title="删除这条记录"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 rounded-full bg-moss-green/10 flex items-center justify-center mx-auto mb-3">
+                  <Leaf className="w-6 h-6 text-moss-green/50" />
+                </div>
+                <p className="text-sm text-ink-light">
+                  还没有物候记录
+                </p>
+                <p className="text-xs text-ink-light/60 mt-1">
+                  补录一条花期或落叶观察，散步不再碰运气
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6">
-          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
+          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-3">
             <h2 className="font-serif text-lg font-semibold text-deep-brown mb-4">
               分时段体验
             </h2>
@@ -259,7 +445,7 @@ export default function BenchDetail() {
             )}
           </div>
 
-          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-3">
+          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-4">
             <h3 className="font-serif text-sm font-semibold text-deep-brown mb-3">
               档案信息
             </h3>
@@ -279,6 +465,10 @@ export default function BenchDetail() {
               <div className="flex justify-between">
                 <span className="text-ink-light">时段记录</span>
                 <span className="text-deep-brown">{bench.experiences.length} 条</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-light">物候记录</span>
+                <span className="text-deep-brown">{(bench.phenology ?? []).length} 条</span>
               </div>
             </div>
           </div>

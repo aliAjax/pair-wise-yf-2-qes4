@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Volume2, Sun, Armchair } from 'lucide-react';
 import type { Bench } from '@/types';
-import { MATERIAL_LABELS, SHADE_LABELS, NOISE_LABELS, STAY_DURATION_LABELS } from '@/types';
+import { MATERIAL_LABELS, SHADE_LABELS, NOISE_LABELS, STAY_DURATION_LABELS, PHENOLOGY_STAGE_LABELS } from '@/types';
+import { useBenchStore } from '@/store/useBenchStore';
+import { getSeasonRecord, PHENOLOGY_STAGE_ICONS, PHENOLOGY_STAGE_COLORS, PHENOLOGY_STAGE_BG } from '@/utils/phenology';
 import Rating from '@/components/Rating/Rating';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
 
@@ -12,9 +14,13 @@ interface BenchCardProps {
 
 export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
   const navigate = useNavigate();
+  const seasonFilter = useBenchStore((state) => state.seasonFilter);
   const comfortScore = calculateComfortScore(bench);
   const comfortLevel = getComfortLevel(comfortScore);
   const comfortColor = getComfortColor(comfortScore);
+
+  const seasonRecord = seasonFilter ? getSeasonRecord(bench, seasonFilter) : undefined;
+  const StageIcon = seasonRecord ? PHENOLOGY_STAGE_ICONS[seasonRecord.stage] : null;
 
   const staggerClass = `stagger-${(index % 6) + 1}`;
 
@@ -62,6 +68,12 @@ export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
           {bench.hasBackrest && (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-moss-green/10 text-moss-green text-xs rounded-md">
               有靠背
+            </span>
+          )}
+          {seasonRecord && StageIcon && (
+            <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md ${PHENOLOGY_STAGE_BG[seasonRecord.stage]} ${PHENOLOGY_STAGE_COLORS[seasonRecord.stage]}`}>
+              <StageIcon className="w-3 h-3" />
+              {seasonRecord.plantName} · {PHENOLOGY_STAGE_LABELS[seasonRecord.stage]}
             </span>
           )}
         </div>

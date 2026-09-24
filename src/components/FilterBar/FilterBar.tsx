@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
-import { MATERIAL_LABELS, ORIENTATION_LABELS, SHADE_LABELS, NOISE_LABELS } from '@/types';
-import type { MaterialType, OrientationType, ShadeLevelType, NoiseLevelType } from '@/types';
+import { MATERIAL_LABELS, ORIENTATION_LABELS, SHADE_LABELS, NOISE_LABELS, SEASON_LABELS } from '@/types';
+import type { MaterialType, OrientationType, ShadeLevelType, NoiseLevelType, SeasonType } from '@/types';
 
 export default function FilterBar() {
   const {
@@ -10,16 +10,18 @@ export default function FilterBar() {
     orientationFilter,
     shadeFilter,
     noiseFilter,
+    seasonFilter,
     setSearchQuery,
     setMaterialFilter,
     setOrientationFilter,
     setShadeFilter,
     setNoiseFilter,
+    setSeasonFilter,
     clearFilters,
     getFilteredBenches,
   } = useBenchStore();
 
-  const hasFilters = searchQuery || materialFilter || orientationFilter || shadeFilter || noiseFilter;
+  const hasFilters = searchQuery || materialFilter || orientationFilter || shadeFilter || noiseFilter || seasonFilter;
   const filteredCount = getFilteredBenches().length;
 
   return (
@@ -87,6 +89,17 @@ export default function FilterBar() {
               <option value="">全部朝向</option>
               {Object.entries(ORIENTATION_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+
+            <select
+              value={seasonFilter || ''}
+              onChange={(e) => setSeasonFilter(e.target.value as SeasonType || null)}
+              className="px-3 py-1.5 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white cursor-pointer"
+            >
+              <option value="">全部物候季</option>
+              {Object.entries(SEASON_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}季有记录</option>
               ))}
             </select>
           </div>
