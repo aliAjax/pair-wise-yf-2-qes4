@@ -2,11 +2,20 @@ import type { Bench } from '@/types';
 
 const STORAGE_KEY = 'bench-archive-data';
 
+function normalizeBench(raw: Bench): Bench {
+  return {
+    ...raw,
+    experiences: Array.isArray(raw.experiences) ? raw.experiences : [],
+    phenologies: Array.isArray(raw.phenologies) ? raw.phenologies : [],
+  };
+}
+
 export function loadBenches(): Bench[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
-      return JSON.parse(data);
+      const parsed: Bench[] = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed.map(normalizeBench) : [];
     }
   } catch (error) {
     console.error('Failed to load benches from localStorage:', error);

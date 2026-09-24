@@ -14,6 +14,13 @@ import {
   Sunset,
   Moon,
   CloudSun,
+  Sprout,
+  Flower2,
+  Leaf,
+  Snowflake,
+  Plus,
+  CalendarDays,
+  AlertCircle,
 } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
 import {
@@ -23,16 +30,41 @@ import {
   NOISE_LABELS,
   STAY_DURATION_LABELS,
   TIME_PERIOD_LABELS,
+  SEASON_LABELS,
+  SEASON_ORDER,
+  PHENOLOGY_STATUS_LABELS,
 } from '@/types';
-import type { TimePeriodType } from '@/types';
+import type { TimePeriodType, SeasonType, PhenologyStatusType } from '@/types';
 import Rating from '@/components/Rating/Rating';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
+import { findLatestPhenology, getPhenologyStatusStyle, todayString } from '@/utils/phenology';
+
+const seasonIcons: Record<SeasonType, typeof Sprout> = {
+  spring: Sprout,
+  summer: Sun,
+  autumn: Leaf,
+  winter: Snowflake,
+};
+
+const phenologyStatusIcons: Record<PhenologyStatusType, typeof Sprout> = {
+  budding: Sprout,
+  blooming: Flower2,
+  leafFall: Leaf,
+};
 
 export default function BenchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getBenchById, deleteBench, initialize, initialized } = useBenchStore();
+  const { getBenchById, deleteBench, initialize, initialized, addPhenology, deletePhenology } = useBenchStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [phenologyForm, setPhenologyForm] = useState({
+    season: 'spring' as SeasonType,
+    plantName: '',
+    status: 'budding' as PhenologyStatusType,
+    observedAt: todayString(),
+  });
+  const [phenologyError, setPhenologyError] = useState('');
+  const [phenologyNotice, setPhenologyNotice] = useState('');
 
   useEffect(() => {
     if (!initialized) {
@@ -75,10 +107,57 @@ export default function BenchDetail() {
     return order.indexOf(a.timePeriod) - order.indexOf(b.timePeriod);
   });
 
+  const seasonalPhenologies = SEASON_ORDER.map((season) => ({
+    season,
+    record: findLatestPhenology(bench.phenologies, season),
+  }));
+
   const handleDelete = () => {
     if (id) {
       deleteBench(id);
       navigate('/');
+    }
+  };
+
+  const handleAddPhenology = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhenologyError('');
+    setPhenologyNotice('');
+
+    if (!id || !bench) return;
+    if (!phenologyForm.plantName.trim()) {
+      setPhenologyError('请填写植物名称');
+      return;
+    }
+    if (!phenologyForm.observedAt) {
+      setPhenologyError('请选择观察日期');
+      return;
+    }
+
+    const result = addPhenology(id, {
+      season: phenologyForm.season,
+      plantName: phenologyForm.plantName.trim(),
+      status: phenologyForm.status,
+      observedAt: phenologyForm.observedAt,
+    });
+
+    if (!result.accepted) {
+      const existing = findLatestPhenology(bench.phenologies, phenologyForm.season);
+      setPhenologyError(
+        `该长椅的${SEASON_LABELS[phenologyForm.season]}季已有 ${existing?.observedAt} 的更新记录，补录更早日期已被退回，原记录保留。`
+      );
+      return;
+    }
+
+    setPhenologyNotice(
+      `${SEASON_LABELS[phenologyForm.season]}季物候已更新为 ${phenologyForm.observedAt} 的记录。`
+    );
+    setPhenologyForm((prev) => ({ ...prev, plantName: '', observedAt: todayString() }));
+  };
+
+  const handleDeletePhenology = (recordId: string) => {
+    if (id) {
+      deletePhenology(id, recordId);
     }
   };
 
@@ -211,6 +290,158 @@ export default function BenchDetail() {
               </div>
             </div>
           </div>
+
+          <div className="paper-texture rounded-xl shadow-paper p-6 fade-in opacity-0 stagger-2">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-serif text-lg font-semibold text-deep-brown">
+                物候记录
+              </h2>
+              <span className="text-xs text-ink-light">
+                同一季节只保留观察日期最新的一次
+              </span>
+            </div>
+
+            <form onSubmit={handleAddPhenology} className="mb-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">季节</label>
+                  <select
+                    value={phenologyForm.season}
+                    onChange={(e) => {
+                      setPhenologyForm((prev) => ({ ...prev, season: e.target.value as SeasonType }));
+                      setPhenologyError('');
+                    }}
+                    className="w-full px-3 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white cursor-pointer"
+                  >
+                    {SEASON_ORDER.map((season) => (
+                      <option key={season} value={season}>
+                        {SEASON_LABELS[season]}季
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">状态</label>
+                  <select
+                    value={phenologyForm.status}
+                    onChange={(e) =>
+                      setPhenologyForm((prev) => ({ ...prev, status: e.target.value as PhenologyStatusType }))
+                    }
+                    className="w-full px-3 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white cursor-pointer"
+                  >
+                    {Object.entries(PHENOLOGY_STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">植物名称</label>
+                  <input
+                    type="text"
+                    value={phenologyForm.plantName}
+                    onChange={(e) => setPhenologyForm((prev) => ({ ...prev, plantName: e.target.value }))}
+                    placeholder="如：悬铃木"
+                    className="w-full px-3 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown placeholder:text-ink-light/60 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-ink-light mb-1">观察日期</label>
+                  <input
+                    type="date"
+                    max={todayString()}
+                    value={phenologyForm.observedAt}
+                    onChange={(e) => {
+                      setPhenologyForm((prev) => ({ ...prev, observedAt: e.target.value }));
+                      setPhenologyError('');
+                    }}
+                    className="w-full px-3 py-2 text-sm bg-white/50 border border-deep-brown/10 rounded-lg text-deep-brown focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {phenologyError && (
+                <div className="flex items-start gap-2 mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{phenologyError}</span>
+                </div>
+              )}
+              {phenologyNotice && (
+                <div className="flex items-start gap-2 mb-3 px-3 py-2 bg-moss-green/10 border border-moss-green/20 rounded-lg text-sm text-moss-green">
+                  <Sprout className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{phenologyNotice}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-moss-green text-white rounded-lg hover:bg-moss-light transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                补录物候
+              </button>
+            </form>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {seasonalPhenologies.map(({ season, record }) => {
+                const SeasonIcon = seasonIcons[season];
+                return (
+                  <div
+                    key={season}
+                    className={`p-4 rounded-lg border ${
+                      record ? 'bg-warm-cream/60 border-deep-brown/10' : 'bg-warm-beige/40 border-deep-brown/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <SeasonIcon className="w-4 h-4 text-ochre" />
+                        <span className="text-sm font-medium text-deep-brown">
+                          {SEASON_LABELS[season]}季
+                        </span>
+                      </div>
+                      {record && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePhenology(record.id)}
+                          className="p-1 text-ink-light/40 hover:text-red-500 rounded transition-colors"
+                          title="删除该季节记录"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {record ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md ${
+                              getPhenologyStatusStyle(record.status).badge
+                            }`}
+                          >
+                            {(() => {
+                              const StatusIcon = phenologyStatusIcons[record.status];
+                              return <StatusIcon className="w-3 h-3" />;
+                            })()}
+                            {PHENOLOGY_STATUS_LABELS[record.status]}
+                          </span>
+                          <span className="text-sm font-medium text-deep-brown">
+                            {record.plantName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-ink-light">
+                          <CalendarDays className="w-3 h-3" />
+                          <span>观察于 {record.observedAt}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-ink-light/60">暂无记录</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -279,6 +510,10 @@ export default function BenchDetail() {
               <div className="flex justify-between">
                 <span className="text-ink-light">时段记录</span>
                 <span className="text-deep-brown">{bench.experiences.length} 条</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-light">物候记录</span>
+                <span className="text-deep-brown">{(bench.phenologies ?? []).length} 条</span>
               </div>
             </div>
           </div>

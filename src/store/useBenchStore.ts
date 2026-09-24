@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { Bench, BenchExperience, MaterialType, OrientationType, ShadeLevelType, NoiseLevelType, StayDurationType } from '@/types';
+import type { Bench, BenchExperience, MaterialType, OrientationType, PhenologyRecord, SeasonType, ShadeLevelType, NoiseLevelType } from '@/types';
 import { loadBenches, saveBenches } from '@/utils/storage';
 import { generateId } from '@/utils/comfort';
+import { isPhenologyAccepted } from '@/utils/phenology';
 import { mockBenches } from '@/data/mockBenches';
 
 interface BenchState {
@@ -11,6 +12,7 @@ interface BenchState {
   orientationFilter: OrientationType | null;
   shadeFilter: ShadeLevelType | null;
   noiseFilter: NoiseLevelType | null;
+  seasonFilter: SeasonType | null;
   initialized: boolean;
 }
 
@@ -21,14 +23,20 @@ interface BenchActions {
   setOrientationFilter: (orientation: OrientationType | null) => void;
   setShadeFilter: (shade: ShadeLevelType | null) => void;
   setNoiseFilter: (noise: NoiseLevelType | null) => void;
+  setSeasonFilter: (season: SeasonType | null) => void;
   clearFilters: () => void;
-  addBench: (bench: Omit<Bench, 'id' | 'createdAt' | 'updatedAt' | 'experiences'>) => void;
+  addBench: (bench: Omit<Bench, 'id' | 'createdAt' | 'updatedAt' | 'experiences' | 'phenologies'>) => void;
   updateBench: (id: string, updates: Partial<Bench>) => void;
   deleteBench: (id: string) => void;
   getBenchById: (id: string) => Bench | undefined;
   addExperience: (benchId: string, experience: Omit<BenchExperience, 'id' | 'benchId'>) => void;
   updateExperience: (benchId: string, expId: string, updates: Partial<BenchExperience>) => void;
   deleteExperience: (benchId: string, expId: string) => void;
+  addPhenology: (
+    benchId: string,
+    phenology: Omit<PhenologyRecord, 'id' | 'benchId'>,
+  ) => { accepted: boolean; record: PhenologyRecord | null };
+  deletePhenology: (benchId: string, recordId: string) => void;
   getFilteredBenches: () => Bench[];
 }
 
@@ -39,6 +47,7 @@ const initialState: BenchState = {
   orientationFilter: null,
   shadeFilter: null,
   noiseFilter: null,
+  seasonFilter: null,
   initialized: false,
 };
 
@@ -60,6 +69,7 @@ export const useBenchStore = create<BenchState & BenchActions>((set, get) => ({
   setOrientationFilter: (orientation) => set({ orientationFilter: orientation }),
   setShadeFilter: (shade) => set({ shadeFilter: shade }),
   setNoiseFilter: (noise) => set({ noiseFilter: noise }),
+  setSeasonFilter: (season) => set({ seasonFilter: season }),
 
   clearFilters: () => set({
     searchQuery: '',
@@ -67,6 +77,7 @@ export const useBenchStore = create<BenchState & BenchActions>((set, get) => ({
     orientationFilter: null,
     shadeFilter: null,
     noiseFilter: null,
+    seasonFilter: null,
   }),
 
   addBench: (benchData) => {
@@ -75,6 +86,7 @@ export const useBenchStore = create<BenchState & BenchActions>((set, get) => ({
       ...benchData,
       id: generateId(),
       experiences: [],
+      phenologies: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -152,9 +164,55 @@ export const useBenchStore = create<BenchState & BenchActions>((set, get) => ({
     saveBenches(newBenches);
   },
 
+  addPhenology: (benchId, phenologyData) => {
+    const target = get().benches.find((bench) => bench.id === benchId);
+    if (!target) return { accepted: false, record: null };
+
+    // 同一长椅同一季节只留观察日期最新的一次；补录更早的日期则退回
+    if (!isPhenologyAccepted(target, phenologyData.season, phenologyData.observedAt)) {
+      return { accepted: false, record: null };
+    }
+
+    const newRecord: PhenologyRecord = {
+      ...phenologyData,
+      id: generateId(),
+      benchId,
+    };
+    const newBenches = get().benches.map((bench) =>
+      bench.id === benchId
+        ? {
+            ...bench,
+            // 同一季节只保留最新一次：新记录更晚时替换旧记录
+            phenologies: [
+              ...(bench.phenologies ?? []).filter((record) => record.season !== phenologyData.season),
+              newRecord,
+            ],
+            updatedAt: new Date().toISOString(),
+          }
+        : bench
+    );
+    set({ benches: newBenches });
+    saveBenches(newBenches);
+    return { accepted: true, record: newRecord };
+  },
+
+  deletePhenology: (benchId, recordId) => {
+    const newBenches = get().benches.map((bench) =>
+      bench.id === benchId
+        ? {
+            ...bench,
+            phenologies: (bench.phenologies ?? []).filter((record) => record.id !== recordId),
+            updatedAt: new Date().toISOString(),
+          }
+        : bench
+    );
+    set({ benches: newBenches });
+    saveBenches(newBenches);
+  },
+
   getFilteredBenches: () => {
-    const { benches, searchQuery, materialFilter, orientationFilter, shadeFilter, noiseFilter } = get();
-    
+    const { benches, searchQuery, materialFilter, orientationFilter, shadeFilter, noiseFilter, seasonFilter } = get();
+
     return benches.filter((bench) => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -163,12 +221,18 @@ export const useBenchStore = create<BenchState & BenchActions>((set, get) => ({
         const matchReview = bench.review.toLowerCase().includes(query);
         if (!matchName && !matchLocation && !matchReview) return false;
       }
-      
+
       if (materialFilter && bench.material !== materialFilter) return false;
       if (orientationFilter && bench.orientation !== orientationFilter) return false;
       if (shadeFilter && bench.shadeLevel !== shadeFilter) return false;
       if (noiseFilter && bench.noiseLevel !== noiseFilter) return false;
-      
+      if (seasonFilter) {
+        const hasSeasonRecord = (bench.phenologies ?? []).some(
+          (record) => record.season === seasonFilter
+        );
+        if (!hasSeasonRecord) return false;
+      }
+
       return true;
     });
   },

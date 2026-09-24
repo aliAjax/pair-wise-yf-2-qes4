@@ -2,6 +2,7 @@ import { Search, X } from 'lucide-react';
 import { useBenchStore } from '@/store/useBenchStore';
 import { MATERIAL_LABELS, ORIENTATION_LABELS, SHADE_LABELS, NOISE_LABELS } from '@/types';
 import type { MaterialType, OrientationType, ShadeLevelType, NoiseLevelType } from '@/types';
+import SeasonTabs from '@/components/SeasonTabs/SeasonTabs';
 
 export default function FilterBar() {
   const {
@@ -10,6 +11,7 @@ export default function FilterBar() {
     orientationFilter,
     shadeFilter,
     noiseFilter,
+    seasonFilter,
     setSearchQuery,
     setMaterialFilter,
     setOrientationFilter,
@@ -19,7 +21,7 @@ export default function FilterBar() {
     getFilteredBenches,
   } = useBenchStore();
 
-  const hasFilters = searchQuery || materialFilter || orientationFilter || shadeFilter || noiseFilter;
+  const hasFilters = searchQuery || materialFilter || orientationFilter || shadeFilter || noiseFilter || seasonFilter;
   const filteredCount = getFilteredBenches().length;
 
   return (
@@ -42,6 +44,10 @@ export default function FilterBar() {
               <X className="w-4 h-4" />
             </button>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <SeasonTabs />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

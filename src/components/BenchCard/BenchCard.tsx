@@ -1,22 +1,32 @@
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Volume2, Sun, Armchair } from 'lucide-react';
-import type { Bench } from '@/types';
-import { MATERIAL_LABELS, SHADE_LABELS, NOISE_LABELS, STAY_DURATION_LABELS } from '@/types';
+import { MapPin, Clock, Volume2, Sun, Armchair, Sprout, Flower2, Leaf } from 'lucide-react';
+import type { Bench, PhenologyStatusType } from '@/types';
+import { MATERIAL_LABELS, SHADE_LABELS, NOISE_LABELS, STAY_DURATION_LABELS, SEASON_LABELS } from '@/types';
 import Rating from '@/components/Rating/Rating';
 import { calculateComfortScore, getComfortLevel, getComfortColor } from '@/utils/comfort';
+import { findLatestPhenology, getPhenologyStatusStyle } from '@/utils/phenology';
+import { useBenchStore } from '@/store/useBenchStore';
 
 interface BenchCardProps {
   bench: Bench;
   index?: number;
 }
 
+const statusIcons: Record<PhenologyStatusType, typeof Sprout> = {
+  budding: Sprout,
+  blooming: Flower2,
+  leafFall: Leaf,
+};
+
 export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
   const navigate = useNavigate();
   const comfortScore = calculateComfortScore(bench);
   const comfortLevel = getComfortLevel(comfortScore);
   const comfortColor = getComfortColor(comfortScore);
+  const seasonFilter = useBenchStore((state) => state.seasonFilter);
 
   const staggerClass = `stagger-${(index % 6) + 1}`;
+  const seasonRecord = seasonFilter ? findLatestPhenology(bench.phenologies, seasonFilter) : undefined;
 
   return (
     <div
@@ -29,7 +39,7 @@ export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
             <Armchair className="w-10 h-10 text-moss-green/50" />
           </div>
         </div>
-        
+
         <div className="absolute top-3 right-3 px-2 py-1 bg-white/80 backdrop-blur-sm rounded-full text-xs font-medium">
           <span className={comfortColor}>{comfortLevel}</span>
           <span className="text-ink-light ml-1">{comfortScore}</span>
@@ -44,7 +54,7 @@ export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
         <h3 className="font-serif text-lg font-semibold text-deep-brown mb-1 line-clamp-1">
           {bench.name}
         </h3>
-        
+
         <div className="flex items-center gap-1 text-ink-light text-sm mb-3">
           <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
           <span className="line-clamp-1">{bench.location}</span>
@@ -62,6 +72,19 @@ export default function BenchCard({ bench, index = 0 }: BenchCardProps) {
           {bench.hasBackrest && (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-moss-green/10 text-moss-green text-xs rounded-md">
               有靠背
+            </span>
+          )}
+          {seasonRecord && (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md ${
+                getPhenologyStatusStyle(seasonRecord.status).badge
+              }`}
+            >
+              {(() => {
+                const StatusIcon = statusIcons[seasonRecord.status];
+                return <StatusIcon className="w-3 h-3" />;
+              })()}
+              {SEASON_LABELS[seasonRecord.season]}·{seasonRecord.plantName}
             </span>
           )}
         </div>
